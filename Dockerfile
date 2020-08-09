@@ -52,7 +52,7 @@ WORKDIR /tmp/node
 RUN git checkout v13.10.1
 RUN ./configure
 RUN make
-RUN sudo make install
+RUN make install
 RUN curl -sL curl -L https://npmjs.org/install.sh  | bash -
 
 # Set up pg defaults

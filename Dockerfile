@@ -29,10 +29,11 @@ ENV SECRET_KEY_BASE OVERWRITE_ME
 # COPY --from=pgloader /usr/local/bin/pgloader-ccl /usr/local/bin/
 
 # install node + npm
-RUN curl https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz | tar xzf - -C /usr/local --strip-components=1
+# RUN curl https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.gz | tar xzf - -C /usr/local --strip-components=1
 
 RUN apt-get update -qq && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y  \
+    build-essential \
     postgresql-client \
     poppler-utils \
     unrtf \
@@ -45,6 +46,14 @@ RUN apt-get update -qq && \
     apache2 \
     supervisor && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN git clone https://github.com/nodejs/node.git /tmp/node
+WORKDIR /tmp/node
+RUN git checkout v13.10.1
+RUN ./configure
+RUN make
+RUN sudo make install
+RUN curl -sL curl -L https://npmjs.org/install.sh  | bash -
 
 # Set up pg defaults
 RUN echo "host all  all    0.0.0.0/0  md5" >> /etc/postgresql/9.6/main/pg_hba.conf
@@ -68,7 +77,8 @@ RUN mkdir -p lib/open_project
 COPY lib/open_project/version.rb ./lib/open_project/
 RUN bundle install --deployment --path vendor/bundle --no-cache \
   --with="docker opf_plugins" --without="test development" --jobs=8 --retry=3 && \
-  rm -rf vendor/bundle/ruby/*/cache && rm -rf vendor/bundle/ruby/*/gems/*/spec && rm -rf vendor/bundle/ruby/*/gems/*/test
+  rm -rf vendor/bundle/ruby/*/cache && rm -rf vendor/bundle/ruby/*/gems/*/spec && \
+  rm -rf vendor/bundle/ruby/*/gems/*/test
 
 # Finally, copy over the whole thing
 COPY . .

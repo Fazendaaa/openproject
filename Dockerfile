@@ -1,9 +1,4 @@
-# FROM ruby:2.6-stretch AS pgloader
-# RUN apt-get update -qq && apt-get install -y libsqlite3-dev make curl gawk freetds-dev libzip-dev
-# COPY docker/mysql-to-postgres/bin/build /tmp/build-pgloader
-# RUN /tmp/build-pgloader && rm /tmp/build-pgloader
-
-FROM ruby:2.6-stretch
+FROM ruby:2.6-buster
 MAINTAINER operations@openproject.com
 
 ENV NODE_VERSION "10.15.0"
@@ -26,14 +21,10 @@ ENV ATTACHMENTS_STORAGE_PATH $APP_DATA_PATH/files
 # Set a default key base, ensure to provide a secure value in production environments!
 ENV SECRET_KEY_BASE OVERWRITE_ME
 
-# COPY --from=pgloader /usr/local/bin/pgloader-ccl /usr/local/bin/
-
-# install node + npm
-# RUN curl https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.gz | tar xzf - -C /usr/local --strip-components=1
-
 RUN apt-get update -qq && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y  \
     build-essential \
+    postgresql \
     postgresql-client \
     poppler-utils \
     unrtf \
@@ -42,23 +33,22 @@ RUN apt-get update -qq && \
     memcached \
     pgloader \
     postfix \
-    postgresql \
     apache2 \
     supervisor && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN git clone https://github.com/nodejs/node.git /tmp/node
-WORKDIR /tmp/node
-RUN git checkout v13.10.1
-RUN ./configure
-RUN make
-RUN make install
-RUN curl -sL curl -L https://npmjs.org/install.sh  | bash -
+# https://stackoverflow.com/a/57344191/7092954
+SHELL ["/bin/bash", "--login", "-c"]
+
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash
+RUN nvm install 10.15.3
+RUN nvm install-latest-npm
+# RUN npm install -g npm 
 
 # Set up pg defaults
-RUN echo "host all  all    0.0.0.0/0  md5" >> /etc/postgresql/9.6/main/pg_hba.conf
-RUN echo "listen_addresses='*'" >> /etc/postgresql/9.6/main/postgresql.conf
-RUN echo "data_directory='$PGDATA'" >> /etc/postgresql/9.6/main/postgresql.conf
+RUN echo "host all  all    0.0.0.0/0  md5" >> /etc/postgresql/11/main/pg_hba.conf
+RUN echo "listen_addresses='*'" >> /etc/postgresql/11/main/postgresql.conf
+RUN echo "data_directory='$PGDATA'" >> /etc/postgresql/11/main/postgresql.conf
 RUN rm -rf "$PGDATA_LEGACY" && rm -rf "$PGDATA" && mkdir -p "$PGDATA" && chown -R postgres:postgres "$PGDATA"
 RUN a2enmod proxy proxy_http && rm -f /etc/apache2/sites-enabled/000-default.conf
 
@@ -75,10 +65,11 @@ COPY modules ./modules
 # OpenProject::Version is required by module versions in gemspecs
 RUN mkdir -p lib/open_project
 COPY lib/open_project/version.rb ./lib/open_project/
-RUN bundle install --deployment --path vendor/bundle --no-cache \
-  --with="docker opf_plugins" --without="test development" --jobs=8 --retry=3 && \
-  rm -rf vendor/bundle/ruby/*/cache && rm -rf vendor/bundle/ruby/*/gems/*/spec && \
-  rm -rf vendor/bundle/ruby/*/gems/*/test
+RUN bundle install --with="docker opf_plugins" --without="test development" \
+  --jobs=`nproc` --retry=3
+  # && \
+  # rm -rf vendor/bundle/ruby/*/cache && rm -rf vendor/bundle/ruby/*/gems/*/spec && \
+  # rm -rf vendor/bundle/ruby/*/gems/*/test
 
 # Finally, copy over the whole thing
 COPY . .

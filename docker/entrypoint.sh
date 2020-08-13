@@ -14,7 +14,7 @@ if [ -d "$PGDATA_LEGACY" ]; then
 	echo "WARN: You are using a legacy volume path for your postgres data. You should mount your postgres volumes at $PGDATA instead of $PGDATA_LEGACY."
 	if [ "$(find "$PGDATA" -type f | wc -l)" = "0" ]; then
 		echo "INFO: $PGDATA is empty, so $PGDATA will be symlinked to $PGDATA_LEGACY as a temporary measure."
-		sed -i "s|$PGDATA|$PGDATA_LEGACY|" /etc/postgresql/9.6/main/postgresql.conf
+		sed -i "s|$PGDATA|$PGDATA_LEGACY|" /etc/postgresql/11/main/postgresql.conf
 		export PGDATA="$PGDATA_LEGACY"
 	else
 		echo "ERROR: $PGDATA contains files, so we will not attempt to symlink $PGDATA to $PGDATA_LEGACY. Please fix your docker configuration."

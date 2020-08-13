@@ -9,7 +9,7 @@ ENV APP_PATH /app
 ENV APP_DATA_PATH /var/openproject/assets
 ENV APP_DATA_PATH_LEGACY /var/db/openproject
 ENV PGDATA /var/openproject/pgdata
-ENV PGDATA_LEGACY /var/lib/postgresql/9.6/main
+ENV PGDATA_LEGACY /var/lib/postgresql/11/main
 
 ENV DATABASE_URL postgres://openproject:openproject@127.0.0.1/openproject
 ENV RAILS_ENV production
@@ -37,14 +37,6 @@ RUN apt-get update -qq && \
     supervisor && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# https://stackoverflow.com/a/57344191/7092954
-SHELL ["/bin/bash", "--login", "-c"]
-
-RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash
-RUN nvm install 10.15.3
-RUN nvm install-latest-npm
-# RUN npm install -g npm 
-
 # Set up pg defaults
 RUN echo "host all  all    0.0.0.0/0  md5" >> /etc/postgresql/11/main/pg_hba.conf
 RUN echo "listen_addresses='*'" >> /etc/postgresql/11/main/postgresql.conf
@@ -66,10 +58,9 @@ COPY modules ./modules
 RUN mkdir -p lib/open_project
 COPY lib/open_project/version.rb ./lib/open_project/
 RUN bundle install --with="docker opf_plugins" --without="test development" \
-  --jobs=`nproc` --retry=3
-  # && \
-  # rm -rf vendor/bundle/ruby/*/cache && rm -rf vendor/bundle/ruby/*/gems/*/spec && \
-  # rm -rf vendor/bundle/ruby/*/gems/*/test
+  --jobs=`nproc` --retry=3 && \
+  rm -rf vendor/bundle/ruby/*/cache && rm -rf vendor/bundle/ruby/*/gems/*/spec && \
+  rm -rf vendor/bundle/ruby/*/gems/*/test
 
 # Finally, copy over the whole thing
 COPY . .
@@ -82,6 +73,21 @@ RUN cp ./docker/mysql-to-postgres/bin/migrate-mysql-to-postgres /usr/local/bin/
 RUN sed -i "s|Rails.groups(:opf_plugins)|Rails.groups(:opf_plugins, :docker)|" config/application.rb
 # Ensure we can write in /tmp/op_uploaded_files (cf. #29112)
 RUN mkdir -p /tmp/op_uploaded_files/ && chown -R $APP_USER:$APP_USER /tmp/op_uploaded_files/
+
+ENV NVM_DIR $APP_PATH/.nvm
+RUN mkdir $NVM_DIR
+
+RUN curl -o- https://raw.githubusercontent.com/creationix/nvm/master/install.sh | bash
+RUN chmod +x $NVM_DIR/nvm.sh
+RUN . $NVM_DIR/nvm.sh && \
+  nvm install $NODE_VERSION && \
+  nvm alias default $NODE_VERSION && \
+  nvm use default && \
+  npm install -g npm
+
+RUN ln -sf $NVM_DIR/versions/node/v$NODE_VERSION/bin/node /usr/local/bin/nodejs
+RUN ln -sf $NVM_DIR/versions/node/v$NODE_VERSION/bin/node /usr/local/bin/node
+RUN ln -sf $NVM_DIR/versions/node/v$NODE_VERSION/bin/npm /usr/local/bin/npm
 
 # Handle the assets precompilation
 RUN bash docker/precompile-assets.sh

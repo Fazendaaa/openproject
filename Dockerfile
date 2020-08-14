@@ -92,6 +92,14 @@ RUN ln -sf $NVM_DIR/versions/node/v$NODE_VERSION/bin/npm /usr/local/bin/npm
 # Handle the assets precompilation
 RUN bash docker/precompile-assets.sh
 
+# Installing Passenger mighr help improve ARM performance some day
+RUN git clone https://github.com/phusion/passenger && \
+  cd passenger && \
+  git checkout release-6.0.4 && \
+  git submodule update --init --recursive && \
+  gem build passenger.gemspec && \
+  gem install passenger-6.0.4.gem
+
 # Expose ports for apache and postgres
 EXPOSE 80 5432
 
